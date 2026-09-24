@@ -5,7 +5,7 @@ os.chdir(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from stable_baselines3 import PPO
 from envs.h1_pick_place_env import H1PickPlaceEnv
  
-CHECKPOINT = "checkpoints/h1_pick_place_final"
+CHECKPOINT = "checkpoints/h1_pick_place_1850000_steps"
  
 env = H1PickPlaceEnv(render_mode="human")
 model = PPO.load(CHECKPOINT)
