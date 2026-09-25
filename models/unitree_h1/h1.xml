@@ -241,4 +241,9 @@
     <motor class="h1" name="right_shoulder_yaw" joint="right_shoulder_yaw" ctrlrange="-18 18"/>
     <motor class="h1" name="right_elbow" joint="right_elbow" ctrlrange="-18 18"/>
   </actuator>
+
+  <sensor>
+    <accelerometer name="imu_accel" site="imu"/>
+    <gyro name="imu_gyro" site="imu"/>
+  </sensor>
 </mujoco>
