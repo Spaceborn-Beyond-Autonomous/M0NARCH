@@ -68,6 +68,14 @@ class TestPerceptionModule(unittest.TestCase):
         self.assertEqual(len(detection["position_3d_camera"]), 3)
         self.assertAlmostEqual(detection["depth_meters"], 2.0, places=2)
 
+        # Test 6D pose transformation to robot torso link (Rawan's handoff)
+        pose_6d = detector.compute_6d_pose_in_torso(detection)
+        self.assertIn("position_torso", pose_6d)
+        self.assertIn("homogeneous_transform", pose_6d)
+        self.assertEqual(pose_6d["frame_id"], "torso_link")
+        self.assertEqual(pose_6d["homogeneous_transform"].shape, (4, 4))
+        self.assertAlmostEqual(pose_6d["position_torso"][0], 2.0 + 0.15, places=2)  # X_torso = Z_cam + 0.15
+
     def test_04_perception_rl_env(self):
         env = H1PerceptionEnv()
         obs, info = env.reset()

@@ -15,3 +15,4 @@ logs/
 # Intermediate RL training checkpoints & logs
 checkpoints/checkpoint_*.zip
 checkpoints/tb_logs/
+*.mp4

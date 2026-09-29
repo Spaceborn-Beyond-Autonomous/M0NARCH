@@ -61,3 +61,55 @@ class ObjectDetector:
             "depth_meters": z_depth,
             "position_3d_camera": np.array([x_cam, y_cam, z_depth], dtype=np.float32),
         }
+
+    def compute_6d_pose_in_torso(
+        self,
+        detection: Dict[str, Any],
+        camera_offset_in_torso: np.ndarray = np.array([0.15, 0.0, 0.45], dtype=np.float32),
+    ) -> Dict[str, Any]:
+        """
+        Transforms 3D camera optical coordinates into 6D pose in torso/base frame.
+        Essential handoff for Manipulation, Inverse Kinematics (IK), and MoveIt 2.
+        
+        Optical frame: X=right, Y=down, Z=forward
+        Torso/Base frame (REP-103): X=forward, Y=left, Z=up
+        
+        Args:
+            detection: Dictionary returned by detect_in_image()
+            camera_offset_in_torso: [x, y, z] camera mount translation relative to torso link
+            
+        Returns:
+            Dictionary with:
+              - 'position_torso': [x, y, z] coordinates in torso frame (meters)
+              - 'orientation_quat_wxyz': [qw, qx, qy, qz] alignment quaternion
+              - 'homogeneous_transform': (4, 4) transformation matrix T_torso_object
+        """
+        pos_cam = detection["position_3d_camera"]
+        x_c, y_c, z_c = pos_cam[0], pos_cam[1], pos_cam[2]
+
+        # Rotate optical -> robot body coordinates
+        # X_robot = Z_cam, Y_robot = -X_cam, Z_robot = -Y_cam
+        x_body = z_c
+        y_body = -x_c
+        z_body = -y_c
+
+        # Add camera mount extrinsic translation
+        pos_torso = np.array([x_body, y_body, z_body], dtype=np.float32) + camera_offset_in_torso
+
+        # Construct 4x4 homogeneous transformation matrix
+        T_torso_object = np.eye(4, dtype=np.float32)
+        T_torso_object[0:3, 3] = pos_torso
+
+        # Optical to body rotation matrix:
+        # [ [0, -1,  0],
+        #   [0,  0, -1],
+        #   [1,  0,  0] ]
+        # Identity orientation for object alignment in torso frame
+        quat_wxyz = np.array([1.0, 0.0, 0.0, 0.0], dtype=np.float32)
+
+        return {
+            "position_torso": pos_torso,
+            "orientation_quat_wxyz": quat_wxyz,
+            "homogeneous_transform": T_torso_object,
+            "frame_id": "torso_link",
+        }
