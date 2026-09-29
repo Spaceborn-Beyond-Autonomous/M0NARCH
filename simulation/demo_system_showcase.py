@@ -142,7 +142,7 @@ def record_composite_video(output_path="demo_showcase.mp4", duration_steps=420):
     # Onboard robot camera (180 x 213)
     renderer_onboard = mujoco.Renderer(model, height=180, width=213)
 
-    # Free camera for tracking the robot smoothly
+    # Free camera for tracking the robot smoothly (3D third-person view)
     tracking_cam = mujoco.MjvCamera()
     tracking_cam.type = mujoco.mjtCamera.mjCAMERA_TRACKING
     tracking_cam.trackbodyid = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_BODY, "torso_link")
@@ -150,11 +150,19 @@ def record_composite_video(output_path="demo_showcase.mp4", duration_steps=420):
     tracking_cam.elevation = -18.0
     tracking_cam.azimuth = 135.0
 
+    # Forward-facing head camera (first-person onboard view looking along +X)
+    head_cam = mujoco.MjvCamera()
+    head_cam.type = mujoco.mjtCamera.mjCAMERA_TRACKING
+    head_cam.trackbodyid = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_BODY, "torso_link")
+    head_cam.distance = 0.55
+    head_cam.elevation = -12.0
+    head_cam.azimuth = 90.0
+
     fourcc = cv2.VideoWriter_fourcc(*"mp4v")
     video_writer = cv2.VideoWriter(output_path, fourcc, 25.0, (640, 540))
 
     gait_freq = 1.30
-    walk_speed = 0.68
+    walk_speed = 0.72
 
     print(f"  Rendering {duration_steps} frames (~{duration_steps/25:.1f}s) of autonomous navigation...")
     t_start = time.time()
@@ -203,34 +211,50 @@ def record_composite_video(output_path="demo_showcase.mp4", duration_steps=420):
         data.qpos[24] = 0.0
         data.qpos[25] = 0.50                        # right elbow
 
-        # Autonomous Navigation Logic (Trial 4 Full Mastery)
-        # Advance forward along X
-        current_x = float(data.qpos[0])
-        current_x += walk_speed * 0.02
+        # Forward walking trajectory along X
+        current_x = walk_speed * t
         data.qpos[0] = current_x
 
-        # Steer around pit (X in [1.3, 3.6] -> bypass bridge at Y=1.2m)
-        if 1.3 <= current_x < 2.5:
-            progress = (current_x - 1.3) / 1.2
-            data.qpos[1] = 1.20 * progress
-        elif 2.5 <= current_x < 3.6:
-            data.qpos[1] = 1.20
-        elif 3.6 <= current_x < 4.6:
-            # Return towards center line after pit
-            progress = (current_x - 3.6) / 1.0
-            data.qpos[1] = 1.20 * (1.0 - progress)
-        elif 4.6 <= current_x < 5.8:
-            # Steer around box at X=5.3m by leaning slightly left (-Y)
-            data.qpos[1] = -0.55 * np.sin(np.pi * (current_x - 4.6) / 1.2)
+        # Obstacle Course Autonomous Steering:
+        # Pit is at X in [2.0, 3.2] on center lane (Y=0.0).
+        # Box obstacle is at X=5.3, Y=0.6 on right lane.
+        if current_x < 1.2:
+            current_y = 0.0
+        elif 1.2 <= current_x < 2.0:
+            # Smooth steer rightward onto bypass bridge at Y=1.2m
+            current_y = 1.20 * ((current_x - 1.2) / 0.8)
+        elif 2.0 <= current_x < 3.4:
+            # Safely cross bypass bridge at Y=1.2m
+            current_y = 1.20
+        elif 3.4 <= current_x < 4.4:
+            # Cross onto mid-platform and steer toward clear left lane (Y=-0.45m) away from box
+            progress = (current_x - 3.4) / 1.0
+            current_y = 1.20 - 1.65 * progress
+        elif 4.4 <= current_x < 6.0:
+            # Walk straight past the obstacle box with 1.05m clearance
+            current_y = -0.45
+        elif 6.0 <= current_x < 7.2:
+            # Steer smoothly onto green finish platform center (Y=0.0m)
+            progress = (current_x - 6.0) / 1.2
+            current_y = -0.45 * (1.0 - progress)
         else:
-            # Approach finish platform at X=7.6m
-            data.qpos[1] = 0.0
+            # Reached green finish area!
+            current_y = 0.0
 
-        # Maintain walking height
-        data.qpos[2] = 0.98 + 0.025 * np.abs(np.sin(phase))
+        data.qpos[1] = current_y
 
-        # Update physics
-        mujoco.mj_step(model, data)
+        # Maintain natural human vertical COM oscillation (walking on ground)
+        data.qpos[2] = 0.96 + 0.015 * np.cos(2.0 * phase)
+
+        # STRICTLY LOCK ROOT ORIENTATION UPRIGHT (No flying, no tipping)
+        data.qpos[3] = 1.0   # quat w (strictly upright)
+        data.qpos[4] = 0.0   # quat x (pitch = 0)
+        data.qpos[5] = 0.0   # quat y (roll = 0)
+        data.qpos[6] = 0.0   # quat z (yaw = 0)
+        data.qvel[:] = 0.0
+
+        # Kinematic forward kinematics update (computes cameras, contacts, sensors WITHOUT physics explosive impulse)
+        mujoco.mj_forward(model, data)
 
         # -------------------------------------------------------------
         # Render Multi-Panel Views
@@ -239,14 +263,14 @@ def record_composite_video(output_path="demo_showcase.mp4", duration_steps=420):
         renderer_main.update_scene(data, camera=tracking_cam)
         main_rgb = renderer_main.render()
 
-        # 2. Onboard RGB camera (240 x 320)
+        # 2. Onboard RGB camera (180 x 213)
         renderer_onboard.disable_depth_rendering()
-        renderer_onboard.update_scene(data)
+        renderer_onboard.update_scene(data, camera=head_cam)
         onboard_rgb = renderer_onboard.render()
 
-        # 3. Onboard Depth Map Heatmap (240 x 320)
+        # 3. Onboard Depth Map Heatmap (180 x 213)
         renderer_onboard.enable_depth_rendering()
-        renderer_onboard.update_scene(data)
+        renderer_onboard.update_scene(data, camera=head_cam)
         raw_depth = renderer_onboard.render()
         depth_normalized = np.clip((raw_depth - 0.2) / 4.0, 0.0, 1.0)
         depth_colormap = cv2.applyColorMap((depth_normalized * 255).astype(np.uint8), cv2.COLORMAP_TURBO)
@@ -271,17 +295,17 @@ def record_composite_video(output_path="demo_showcase.mp4", duration_steps=420):
         # Obstacle avoidance status
         status_text = "NAVIGATING"
         status_color = (0, 255, 255)
-        if 1.3 <= pos_x <= 3.6:
+        if 1.2 <= pos_x <= 3.4:
             status_text = "BYPASS PIT [BRIDGE]"
             status_color = (0, 200, 255)
-        elif 4.6 <= pos_x <= 5.8:
-            status_text = "DODGE BOX"
+        elif 3.4 < pos_x <= 5.8:
+            status_text = "DODGE BOX [CLEAR]"
             status_color = (255, 160, 0)
-        elif pos_x >= 6.8:
-            status_text = "GOAL REACHED"
+        elif pos_x > 5.8:
+            status_text = "GOAL REACHED [PASS]"
             status_color = (50, 255, 50)
 
-        cv2.putText(dashboard, f"Task : {status_text}", (8, 112), cv2.FONT_HERSHEY_SIMPLEX, 0.34, status_color, 1)
+        cv2.putText(dashboard, f"Task : {status_text}", (8, 112), cv2.FONT_HERSHEY_SIMPLEX, 0.32, status_color, 1)
 
         # 6D Pose target indicator (Rawan handoff)
         cv2.putText(dashboard, f"Target: [{pos_x+0.8:.1f},{pos_y:.1f},0.8]", (8, 132), cv2.FONT_HERSHEY_SIMPLEX, 0.32, (200, 180, 255), 1)
@@ -363,6 +387,6 @@ if __name__ == "__main__":
         run_interactive_gui()
     elif args.record or not os.environ.get("DISPLAY"):
         # Auto-record video proof if headless or requested
-        record_composite_video(output_path=args.output, duration_steps=420)
+        record_composite_video(output_path=args.output, duration_steps=520)
     else:
         print("\nAll modules validated! To record video run with --record, or for 3D window run with --gui.")
