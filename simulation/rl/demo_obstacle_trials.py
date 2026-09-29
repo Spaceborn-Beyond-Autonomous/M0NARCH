@@ -33,6 +33,11 @@ if sys.platform == "win32":
     except Exception:
         pass
 
+# Add simulation/rl directory to sys.path
+RL_DIR = str(Path(__file__).resolve().parent)
+if RL_DIR not in sys.path:
+    sys.path.insert(0, RL_DIR)
+
 from h1_locomotion_env import H1ObstacleCourseEnv
 
 
