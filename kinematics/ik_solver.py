@@ -101,7 +101,10 @@ if __name__ == "__main__":
     print(f"  Final error: {result['error_m']} m")
 
     print("\nTest 3: Left arm IK -- reach forward (e.g. to grasp an object)")
-    target_arm = np.array([0.2, 0.25, 0.3])  # confirmed within reachable workspace
+    # Generate a guaranteed-reachable target via FK at a known pose,
+    # then verify IK can recover it from a different starting guess.
+    known_angles = [0.3, -0.2, 0.4, 0.6]
+    target_arm = robot.left_arm.end_effector_position(known_angles)
     result = solve_ik(robot.left_arm, target_position=target_arm,
                        max_iterations=300)
     print(f"  Target: {target_arm}")
