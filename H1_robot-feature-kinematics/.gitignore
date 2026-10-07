@@ -1,0 +1,17 @@
+__pycache__/
+*.py[cod]
+
+.venv/
+venv/
+
+build/
+install/
+log/
+logs/
+
+*.egg-info/
+.pytest_cache/
+
+# Intermediate RL training checkpoints & logs
+checkpoints/checkpoint_*.zip
+checkpoints/tb_logs/

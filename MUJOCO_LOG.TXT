@@ -1,0 +1,92 @@
+WARNING Tue Oct  6 23:36:37 2026: Attach conflict when attaching 'robotiq_2f85' to 'h1_pick_place', policy is 'warning'
+impratio: parent has 1 (default), child has 10, keeping parent value
+cone: parent has 0 (default), child has 1, keeping parent value
+
+WARNING Tue Oct  6 23:37:42 2026: Attach conflict when attaching 'robotiq_2f85' to 'h1_pick_place', policy is 'warning'
+impratio: parent has 1 (default), child has 10, keeping parent value
+cone: parent has 0 (default), child has 1, keeping parent value
+
+WARNING Tue Oct  6 23:40:33 2026: Attach conflict when attaching 'robotiq_2f85' to 'h1_pick_place', policy is 'warning'
+impratio: parent has 1 (default), child has 10, keeping parent value
+cone: parent has 0 (default), child has 1, keeping parent value
+
+WARNING Tue Oct  6 23:46:07 2026: Attach conflict when attaching 'robotiq_2f85' to 'h1_pick_place', policy is 'warning'
+impratio: parent has 1 (default), child has 10, keeping parent value
+cone: parent has 0 (default), child has 1, keeping parent value
+
+WARNING Tue Oct  6 23:49:22 2026: Attach conflict when attaching 'robotiq_2f85' to 'h1_pick_place', policy is 'warning'
+impratio: parent has 1 (default), child has 10, keeping parent value
+cone: parent has 0 (default), child has 1, keeping parent value
+
+WARNING Tue Oct  6 23:52:20 2026: Attach conflict when attaching 'robotiq_2f85' to 'h1_pick_place', policy is 'warning'
+impratio: parent has 1 (default), child has 10, keeping parent value
+cone: parent has 0 (default), child has 1, keeping parent value
+
+WARNING Wed Oct  7 00:00:10 2026: Attach conflict when attaching 'robotiq_2f85' to 'h1_pick_place', policy is 'warning'
+impratio: parent has 1 (default), child has 10, keeping parent value
+cone: parent has 0 (default), child has 1, keeping parent value
+
+WARNING Wed Oct  7 00:06:00 2026: Attach conflict when attaching 'robotiq_2f85' to 'h1_pick_place', policy is 'warning'
+impratio: parent has 1 (default), child has 10, keeping parent value
+cone: parent has 0 (default), child has 1, keeping parent value
+
+WARNING Wed Oct  7 00:12:05 2026: Attach conflict when attaching 'robotiq_2f85' to 'h1_pick_place', policy is 'warning'
+impratio: parent has 1 (default), child has 10, keeping parent value
+cone: parent has 0 (default), child has 1, keeping parent value
+
+WARNING Wed Oct  7 00:12:40 2026: Attach conflict when attaching 'robotiq_2f85' to 'h1_pick_place', policy is 'warning'
+impratio: parent has 1 (default), child has 10, keeping parent value
+cone: parent has 0 (default), child has 1, keeping parent value
+
+WARNING Wed Oct  7 08:33:41 2026: Attach conflict when attaching 'robotiq_2f85' to 'h1_pick_place', policy is 'warning'
+impratio: parent has 1 (default), child has 10, keeping parent value
+cone: parent has 0 (default), child has 1, keeping parent value
+
+WARNING Wed Oct  7 08:38:46 2026: Attach conflict when attaching 'robotiq_2f85' to 'h1_pick_place', policy is 'warning'
+impratio: parent has 1 (default), child has 10, keeping parent value
+cone: parent has 0 (default), child has 1, keeping parent value
+
+WARNING Wed Oct  7 08:40:49 2026: Attach conflict when attaching 'robotiq_2f85' to 'h1_pick_place', policy is 'warning'
+impratio: parent has 1 (default), child has 10, keeping parent value
+cone: parent has 0 (default), child has 1, keeping parent value
+
+WARNING Wed Oct  7 08:42:44 2026: Attach conflict when attaching 'robotiq_2f85' to 'h1_pick_place', policy is 'warning'
+impratio: parent has 1 (default), child has 10, keeping parent value
+cone: parent has 0 (default), child has 1, keeping parent value
+
+WARNING Wed Oct  7 08:47:15 2026: Attach conflict when attaching 'robotiq_2f85' to 'h1_pick_place', policy is 'warning'
+impratio: parent has 1 (default), child has 10, keeping parent value
+cone: parent has 0 (default), child has 1, keeping parent value
+
+WARNING Wed Oct  7 08:49:47 2026: Attach conflict when attaching 'robotiq_2f85' to 'h1_pick_place', policy is 'warning'
+impratio: parent has 1 (default), child has 10, keeping parent value
+cone: parent has 0 (default), child has 1, keeping parent value
+
+WARNING Wed Oct  7 08:50:25 2026: Attach conflict when attaching 'robotiq_2f85' to 'h1_pick_place', policy is 'warning'
+impratio: parent has 1 (default), child has 10, keeping parent value
+cone: parent has 0 (default), child has 1, keeping parent value
+
+WARNING Wed Oct  7 08:56:14 2026: Attach conflict when attaching 'robotiq_2f85' to 'h1_pick_place', policy is 'warning'
+impratio: parent has 1 (default), child has 10, keeping parent value
+cone: parent has 0 (default), child has 1, keeping parent value
+
+WARNING Wed Oct  7 09:03:38 2026: Attach conflict when attaching 'robotiq_2f85' to 'h1_pick_place', policy is 'warning'
+impratio: parent has 1 (default), child has 10, keeping parent value
+cone: parent has 0 (default), child has 1, keeping parent value
+
+WARNING Wed Oct  7 09:04:44 2026: Attach conflict when attaching 'robotiq_2f85' to 'h1_pick_place', policy is 'warning'
+impratio: parent has 1 (default), child has 10, keeping parent value
+cone: parent has 0 (default), child has 1, keeping parent value
+
+WARNING Wed Oct  7 09:05:28 2026: Attach conflict when attaching 'robotiq_2f85' to 'h1_pick_place', policy is 'warning'
+impratio: parent has 1 (default), child has 10, keeping parent value
+cone: parent has 0 (default), child has 1, keeping parent value
+
+WARNING Wed Oct  7 09:05:59 2026: Attach conflict when attaching 'robotiq_2f85' to 'h1_pick_place', policy is 'warning'
+impratio: parent has 1 (default), child has 10, keeping parent value
+cone: parent has 0 (default), child has 1, keeping parent value
+
+WARNING Wed Oct  7 09:10:27 2026: Attach conflict when attaching 'robotiq_2f85' to 'h1_pick_place', policy is 'warning'
+impratio: parent has 1 (default), child has 10, keeping parent value
+cone: parent has 0 (default), child has 1, keeping parent value
+

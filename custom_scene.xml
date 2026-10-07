@@ -1,0 +1,32 @@
+<mujoco model="h1_with_obstacles_and_pick">
+  <!-- Import your existing working scene -->
+  <include file="scene.xml"/>
+  
+  <asset>
+    <material name="obs_mat" rgba="0.9 0.2 0.2 1.0" specular="0.5"/>
+    <material name="table_mat" rgba="0.2 0.2 0.2 1.0" specular="0.8"/>
+    <material name="payload_mat" rgba="0.1 0.9 0.1 1.0" specular="0.9"/>
+  </asset>
+
+  <worldbody>
+    <!-- Movable User Obstacle for Walk Avoidance -->
+    <body name="user_obstacle" pos="3.0 0.0 0.4" mocap="true">
+      <geom type="box" size="0.2 0.2 0.4" material="obs_mat" contype="0" conaffinity="0"/>
+    </body>
+
+    <!-- Table and Payload for Pick & Place -->
+    <body name="table" pos="0.5 -0.4 0.4">
+      <geom type="box" size="0.2 0.3 0.4" material="table_mat"/>
+    </body>
+
+    <body name="payload" pos="0.5 -0.4 0.85">
+      <freejoint name="payload_joint"/>
+      <geom name="payload_geom" type="box" size="0.04 0.04 0.04" mass="0.1" material="payload_mat"/>
+    </body>
+  </worldbody>
+
+  <equality>
+    <!-- Magnetic Grasping Trick: active="false" means it starts turned off -->
+    <weld name="grasp_weld" body1="right_elbow_link" body2="payload" active="false" relpose="0 0.2 0 1 0 0 0"/>
+  </equality>
+</mujoco>

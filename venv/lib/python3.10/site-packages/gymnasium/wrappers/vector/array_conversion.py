@@ -1,0 +1,136 @@
+"""Vector wrapper for converting between Array API compatible frameworks."""
+
+from __future__ import annotations
+
+from types import ModuleType
+from typing import Any
+
+import gymnasium as gym
+from gymnasium.core import ActType, ObsType, WrapperActType, WrapperObsType
+from gymnasium.vector import VectorEnv, VectorWrapper
+from gymnasium.wrappers.array_conversion import (
+    Device,
+    array_conversion,
+    module_name_to_namespace,
+)
+
+__all__ = ["ArrayConversion"]
+
+
+class ArrayConversion(
+    # The reward and termination/truncation arrays are converted too, so they're typed as `Any`
+    VectorWrapper[WrapperObsType, WrapperActType, ObsType, ActType, Any],
+    gym.utils.RecordConstructorArgs,
+):
+    """Wraps a vector environment returning Array API compatible arrays so that it can be interacted with through a specific framework.
+
+    Popular Array API frameworks include ``numpy``, ``torch``, ``jax.numpy``, ``cupy`` etc. With this wrapper, you can convert outputs from your environment to
+    any of these frameworks. Conversely, actions are automatically mapped back to the environment framework, if possible without moving the
+    data or device transfers.
+
+    Notes:
+        A vectorized version of :class:`gymnasium.wrappers.ArrayConversion`
+
+    Example:
+        >>> import gymnasium as gym                                         # doctest: +SKIP
+        >>> envs = gym.make_vec("JaxEnv-vx", 3)                             # doctest: +SKIP
+        >>> envs = ArrayConversion(envs, xp=np)                             # doctest: +SKIP
+    """
+
+    def __init__(
+        self,
+        env: VectorEnv[ObsType, ActType, Any],
+        env_xp: ModuleType,
+        target_xp: ModuleType,
+        env_device: Device | None = None,
+        target_device: Device | None = None,
+    ) -> None:
+        """Wrapper class to change inputs and outputs of environment to any Array API framework.
+
+        Args:
+            env: The Array API compatible environment to wrap
+            env_xp: The Array API framework the environment is on
+            target_xp: The Array API framework to convert to
+            env_device: The device the environment is on
+            target_device: The device on which Arrays should be returned
+        """
+        gym.utils.RecordConstructorArgs.__init__(self)
+        VectorWrapper.__init__(self, env)
+        self._env_xp = env_xp
+        self._target_xp = target_xp
+        self._env_device = env_device
+        self._target_device = target_device
+
+    def step(
+        self, actions: WrapperActType
+    ) -> tuple[WrapperObsType, Any, Any, Any, dict[str, Any]]:
+        """Transforms the action to the specified xp module array type.
+
+        Args:
+            actions: The action to perform
+
+        Returns:
+            A tuple containing xp versions of the next observation, reward, termination, truncation, and extra info.
+        """
+        env_actions = array_conversion(
+            actions, xp=self._env_xp, device=self._env_device
+        )
+        obs, reward, terminated, truncated, info = self.env.step(env_actions)
+
+        return (
+            array_conversion(obs, xp=self._target_xp, device=self._target_device),
+            array_conversion(reward, xp=self._target_xp, device=self._target_device),
+            array_conversion(
+                terminated, xp=self._target_xp, device=self._target_device
+            ),
+            array_conversion(truncated, xp=self._target_xp, device=self._target_device),
+            array_conversion(info, xp=self._target_xp, device=self._target_device),
+        )
+
+    def reset(
+        self,
+        *,
+        seed: int | None = None,
+        options: dict[str, Any] | None = None,
+    ) -> tuple[WrapperObsType, dict[str, Any]]:
+        """Resets the environment returning xp-based observation and info.
+
+        Args:
+            seed: The seed for resetting the environment
+            options: The options for resetting the environment, these are converted to xp arrays.
+
+        Returns:
+            xp-based observations and info
+        """
+        if options:
+            options = array_conversion(
+                options, xp=self._env_xp, device=self._env_device
+            )
+
+        return array_conversion(
+            self.env.reset(seed=seed, options=options),
+            xp=self._target_xp,
+            device=self._target_device,
+        )
+
+    def __getstate__(self) -> dict[str, Any]:
+        """Returns the object pickle state with args and kwargs."""
+        env_xp_name = self._env_xp.__name__.replace("array_api_compat.", "")
+        target_xp_name = self._target_xp.__name__.replace("array_api_compat.", "")
+        env_device = self._env_device
+        target_device = self._target_device
+        return {
+            "env_xp_name": env_xp_name,
+            "target_xp_name": target_xp_name,
+            "env_device": env_device,
+            "target_device": target_device,
+            "env": self.env,
+        }
+
+    def __setstate__(self, d: dict[str, Any]) -> None:
+        """Sets the object pickle state using d."""
+        self.env = d["env"]
+        self._env_xp = module_name_to_namespace(d["env_xp_name"])
+        self._target_xp = module_name_to_namespace(d["target_xp_name"])
+        self._env_device = d["env_device"]
+        self._target_device = d["target_device"]

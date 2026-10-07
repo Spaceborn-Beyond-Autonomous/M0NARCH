@@ -1,0 +1,185 @@
+"""A collection of wrappers for modifying the reward with an internal state.
+
+* ``NormalizeReward`` - Normalizes the rewards to a mean and standard deviation
+"""
+
+from __future__ import annotations
+
+from typing import Any
+
+import numpy as np
+
+import gymnasium as gym
+from gymnasium.core import ActType, ObsType
+from gymnasium.error import InvalidBound
+from gymnasium.vector.vector_env import AutoresetMode, VectorEnv, VectorWrapper
+from gymnasium.wrappers.utils import RunningMeanStd
+
+__all__ = ["NormalizeReward"]
+
+
+class NormalizeReward(
+    VectorWrapper[ObsType, ActType, ObsType, ActType, np.ndarray],
+    gym.utils.RecordConstructorArgs,
+):
+    r"""This wrapper will scale rewards s.t. their exponential moving average has an approximately fixed variance.
+
+    The property `_update_running_mean` allows to freeze/continue the running mean calculation of the reward
+    statistics. If `True` (default), the `RunningMeanStd` will get updated every time `self.normalize()` is called.
+    If False, the calculated statistics are used but not updated anymore; this may be used during evaluation.
+
+    Note:
+        The scaling depends on past trajectories and rewards will not be scaled correctly if the wrapper was newly
+        instantiated or the policy was changed recently.
+
+    Example without the normalize reward wrapper:
+        >>> import gymnasium as gym
+        >>> import numpy as np
+        >>> envs = gym.make_vec("MountainCarContinuous-v0", 3)
+        >>> _ = envs.reset(seed=123)
+        >>> _ = envs.action_space.seed(123)
+        >>> episode_rewards = []
+        >>> for _ in range(100):
+        ...     observation, reward, *_ = envs.step(envs.action_space.sample())
+        ...     episode_rewards.append(reward)
+        ...
+        >>> envs.close()
+        >>> np.mean(episode_rewards)
+        np.float64(-0.03359492141887935)
+        >>> np.std(episode_rewards)
+        np.float64(0.029028230434438706)
+
+    Example with the normalize reward wrapper:
+        >>> import gymnasium as gym
+        >>> import numpy as np
+        >>> envs = gym.make_vec("MountainCarContinuous-v0", 3)
+        >>> envs = NormalizeReward(envs)
+        >>> _ = envs.reset(seed=123)
+        >>> _ = envs.action_space.seed(123)
+        >>> episode_rewards = []
+        >>> for _ in range(100):
+        ...     observation, reward, *_ = envs.step(envs.action_space.sample())
+        ...     episode_rewards.append(reward)
+        ...
+        >>> envs.close()
+        >>> np.mean(episode_rewards)
+        np.float64(-0.1598639409552856)
+        >>> np.std(episode_rewards)
+        np.float64(0.2780030923586878)
+    """
+
+    return_rms: RunningMeanStd
+    accumulated_reward: np.ndarray[tuple[int], np.dtype[np.float32]]
+    gamma: float
+    epsilon: float
+    _update_running_mean: bool
+    _prev_dones: np.ndarray[tuple[int], np.dtype[np.float32]]
+    _autoreset_mode: AutoresetMode
+
+    def __init__(
+        self,
+        env: VectorEnv[ObsType, ActType, np.ndarray],
+        gamma: float = 0.99,
+        epsilon: float = 1e-8,
+    ) -> None:
+        """This wrapper will normalize immediate rewards s.t. their exponential moving average has an approximately fixed variance.
+
+        Args:
+            env (env): The environment to apply the wrapper
+            epsilon (float): A stability parameter
+            gamma (float): The discount factor that is used in the exponential moving average.
+
+        Raises:
+            InvalidBound: If ``gamma`` is outside ``[0, 1]``, or if ``epsilon`` is not strictly positive.
+        """
+        # The exponential moving average multiplies the accumulator by `gamma` on
+        # every step, so a value above one makes it diverge instead of converging,
+        # and a negative one alternates its sign.
+        if not 0 <= gamma <= 1:
+            raise InvalidBound(
+                f"`gamma` should be in the interval [0, 1]. Received {gamma}"
+            )
+        # `epsilon` is added under the square root to keep the division away from
+        # zero, so a non-positive value defeats its purpose and, once it exceeds
+        # the variance, silently turns every normalized reward into NaN.
+        if epsilon <= 0:
+            raise InvalidBound(
+                f"`epsilon` should be strictly positive. Received {epsilon}"
+            )
+
+        gym.utils.RecordConstructorArgs.__init__(self, gamma=gamma, epsilon=epsilon)
+        VectorWrapper.__init__(self, env)
+
+        self.return_rms = RunningMeanStd(shape=())
+        self.accumulated_reward = np.zeros((self.num_envs,), dtype=np.float32)
+        self.gamma = gamma
+        self.epsilon = epsilon
+        self._update_running_mean = True
+        self._prev_dones = np.zeros((self.num_envs,), dtype=np.float32)
+        self._autoreset_mode = self.env.metadata.get(
+            "autoreset_mode", AutoresetMode.NEXT_STEP
+        )
+
+    @property
+    def update_running_mean(self) -> bool:
+        """Property to freeze/continue the running mean calculation of the reward statistics."""
+        return self._update_running_mean
+
+    @update_running_mean.setter
+    def update_running_mean(self, setting: bool) -> None:
+        """Sets the property to freeze/continue the running mean calculation of the reward statistics."""
+        self._update_running_mean = setting
+
+    def reset(
+        self,
+        *,
+        seed: int | None = None,
+        options: dict[str, Any] | None = None,
+    ) -> tuple[ObsType, dict[str, Any]]:
+        """Resets the environment and clears accumulated reward tracking state."""
+        self.accumulated_reward[:] = 0
+        self._prev_dones[:] = 0
+        return super().reset(seed=seed, options=options)
+
+    def step(
+        self, actions: ActType
+    ) -> tuple[
+        ObsType,
+        np.ndarray[tuple[int], np.dtype[np.float64]],
+        np.ndarray[tuple[int], np.dtype[np.bool_]],
+        np.ndarray[tuple[int], np.dtype[np.bool_]],
+        dict[str, Any],
+    ]:
+        """Steps through the environment, normalizing the reward returned."""
+        obs, reward, terminated, truncated, info = super().step(actions)
+        # SAME_STEP resets inside the terminating step, so the following step is
+        # already the first step of a new episode and must update statistics.
+        # NEXT_STEP / DISABLED still skip the autoreset step after a done.
+        if self._autoreset_mode == AutoresetMode.SAME_STEP:
+            active = np.ones((self.num_envs,), dtype=bool)
+        else:
+            active = ~self._prev_dones.astype(bool)
+        self.accumulated_reward[active] = (
+            self.accumulated_reward[active] * self.gamma * (1 - terminated[active])
+            + reward[active]
+        )
+        if self._update_running_mean and np.any(active):
+            self.return_rms.update(self.accumulated_reward[active])
+        self._prev_dones = np.logical_or(terminated, truncated).astype(np.float32)
+        if self._autoreset_mode == AutoresetMode.SAME_STEP:
+            # The done sub-environments have already been reset; start a new
+            # return immediately rather than carrying the previous episode.
+            self.accumulated_reward[self._prev_dones.astype(bool)] = 0
+        return (
+            obs,
+            reward / np.sqrt(self.return_rms.var + self.epsilon),
+            terminated,
+            truncated,
+            info,
+        )
+
+    def normalize(self, reward: float | np.floating | np.integer) -> np.float64:
+        """Normalizes the rewards with the running mean rewards and their variance."""
+        if self._update_running_mean:
+            self.return_rms.update(self.accumulated_reward)
+        return reward / np.sqrt(self.return_rms.var + self.epsilon)

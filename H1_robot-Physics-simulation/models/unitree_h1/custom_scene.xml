@@ -1,0 +1,15 @@
+<mujoco model="h1_with_obstacle">
+  <!-- Import your existing working scene (which has the 'home' keyframe) -->
+  <include file="scene.xml"/>
+  
+  <asset>
+    <material name="obs_mat" rgba="0.9 0.2 0.2 1.0" specular="0.5"/>
+  </asset>
+
+  <worldbody>
+    <!-- Movable User Obstacle (mocap="true" allows us to teleport it via clicks) -->
+    <body name="user_obstacle" pos="3.0 0.0 0.4" mocap="true">
+      <geom type="box" size="0.2 0.2 0.4" material="obs_mat" contype="0" conaffinity="0"/>
+    </body>
+  </worldbody>
+</mujoco>

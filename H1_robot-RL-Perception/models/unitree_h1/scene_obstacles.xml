@@ -1,0 +1,70 @@
+<mujoco model="h1 obstacle course">
+  <include file="h1.xml"/>
+
+  <visual>
+    <headlight diffuse="0.7 0.7 0.7" ambient="0.3 0.3 0.3" specular="0.1 0.1 0.1"/>
+    <rgba haze="0.15 0.25 0.35 1"/>
+    <global azimuth="150" elevation="-25"/>
+  </visual>
+
+  <asset>
+    <texture type="skybox" builtin="gradient" rgb1="0.3 0.5 0.7" rgb2="0 0 0" width="512" height="3072"/>
+    <texture type="2d" name="groundplane" builtin="checker" mark="edge" rgb1="0.25 0.3 0.35" rgb2="0.15 0.2 0.25"
+      markrgb="0.8 0.8 0.8" width="300" height="300"/>
+    <material name="groundplane" texture="groundplane" texuniform="true" texrepeat="5 5" reflectance="0.15"/>
+
+    <texture type="2d" name="pit_texture" builtin="flat" rgb1="0.1 0.05 0.05" width="100" height="100"/>
+    <material name="pit_mat" rgba="0.3 0.08 0.08 1" reflectance="0.05"/>
+    <material name="pit_hazard" rgba="0.8 0.15 0.15 1"/>
+
+    <material name="box_mat" rgba="0.9 0.4 0.1 1" reflectance="0.3"/>
+    <material name="finish_mat" rgba="0.15 0.65 0.25 1" reflectance="0.2"/>
+    <material name="bypass_mat" rgba="0.25 0.35 0.45 1" reflectance="0.2"/>
+  </asset>
+
+  <worldbody>
+    <light pos="0 0 4.0" dir="0 0 -1" directional="true"/>
+    <light pos="5 0 4.0" dir="0 0 -1" directional="true"/>
+
+    <!-- ================================================================ -->
+    <!-- ZONE 1: START AREA (x: -2.0 to +2.0)                             -->
+    <!-- ================================================================ -->
+    <geom name="start_platform" type="box" size="2.0 2.0 0.05" pos="0 0 -0.05" material="groundplane" contype="1" conaffinity="1"/>
+
+    <!-- ================================================================ -->
+    <!-- ZONE 2: PIT HAZARD (x: 2.0 to 3.2)                              -->
+    <!-- Center path has a 1.2m wide pit (gap); side path has a bridge    -->
+    <!-- ================================================================ -->
+    <!-- Pit hole (bottom floor 0.6m deep) -->
+    <geom name="pit_floor" type="box" size="0.6 0.7 0.02" pos="2.6 0 -0.65" material="pit_mat" contype="1" conaffinity="1"/>
+    <!-- Pit warning hazard border -->
+    <geom name="pit_border_left" type="box" size="0.6 0.04 0.02" pos="2.6 -0.72 -0.02" material="pit_hazard" contype="1" conaffinity="1"/>
+    <geom name="pit_border_right" type="box" size="0.6 0.04 0.02" pos="2.6 0.72 -0.02" material="pit_hazard" contype="1" conaffinity="1"/>
+    <!-- Side bypass lane (allows robot to navigate around the pit on the right side) -->
+    <geom name="pit_bypass" type="box" size="0.6 0.5 0.05" pos="2.6 1.2 -0.05" material="bypass_mat" contype="1" conaffinity="1"/>
+
+    <!-- ================================================================ -->
+    <!-- ZONE 3: MID PLATFORM (x: 3.2 to 5.0)                             -->
+    <!-- ================================================================ -->
+    <geom name="mid_platform" type="box" size="0.9 2.0 0.05" pos="4.1 0 -0.05" material="groundplane" contype="1" conaffinity="1"/>
+
+    <!-- ================================================================ -->
+    <!-- ZONE 4: OBSTACLE BOX (at x: 5.3)                                 -->
+    <!-- Square Box on the bypass trajectory (x=5.3, y=0.8, height=0.45m) -->
+    <!-- ================================================================ -->
+    <geom name="obstacle_box" type="box" size="0.20 0.45 0.22" pos="5.3 1.0 0.22" material="box_mat" contype="1" conaffinity="1"/>
+    <geom name="box_platform" type="box" size="0.6 2.0 0.05" pos="5.3 0 -0.05" material="groundplane" contype="1" conaffinity="1"/>
+
+    <!-- ================================================================ -->
+    <!-- ZONE 5: FINISH AREA (x: 6.0 to 10.0)                             -->
+    <!-- ================================================================ -->
+    <geom name="finish_platform" type="box" size="2.0 2.0 0.05" pos="7.9 0 -0.05" material="finish_mat" contype="1" conaffinity="1"/>
+
+    <!-- Deep catch net for clean simulation resets -->
+    <geom name="safety_catch" type="box" size="15 10 0.01" pos="5 0 -2.5" rgba="0 0 0 0" contype="1" conaffinity="1"/>
+  </worldbody>
+
+  <keyframe>
+    <key name="home" qpos="0 0 0.98 1 0 0 0 0 0 -0.4 0.8 -0.4 0 0 -0.4 0.8 -0.4 0 0 0 0 0 0 0 0 0"/>
+  </keyframe>
+</mujoco>

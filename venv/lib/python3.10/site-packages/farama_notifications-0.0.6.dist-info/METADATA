@@ -1,0 +1,23 @@
+Metadata-Version: 2.4
+Name: Farama-Notifications
+Version: 0.0.6
+Summary: Notifications for all Farama Foundation maintained libraries.
+Home-page: https://github.com/Farama-Foundation/Farama-Notifications
+Author: Jordan Terry
+Author-email: Jkterry@farama.org
+Classifier: Programming Language :: Python :: 3
+Classifier: License :: OSI Approved :: MIT License
+Classifier: Operating System :: OS Independent
+Description-Content-Type: text/markdown
+License-File: LICENSE
+Dynamic: author
+Dynamic: author-email
+Dynamic: classifier
+Dynamic: description
+Dynamic: description-content-type
+Dynamic: home-page
+Dynamic: license-file
+Dynamic: summary
+
+# Farama-Notifications
+Allows for providing notifications on import to all Farama Packages
