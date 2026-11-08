@@ -119,6 +119,8 @@ class PhysicsWalker:
         self.cmd[:] = 0
         self.lo, self.hi = m.actuator_ctrlrange.T
         self.status = "walking"
+        self._stand = None          # balance controller used after stop()
+        self._stop_t0 = None
 
     def step(self, m, d, cmd=None):
         """One physics step (m.opt.timestep = 0.002 s)."""
@@ -149,6 +151,35 @@ class PhysicsWalker:
             self.tgt = self.act * ACTION_SCALE + DEFAULT
         if d.qpos[2] < 0.6:
             self.status = "fallen"
+    
+    def stop(self, m, d):
+        """Stop at the goal and stand still: step in place until both feet are flat and level
+        with each other, then hand over to the Stand balance controller (stand_fix.py)."""
+        if self.status == "fallen":
+            mujoco.mj_step(m, d)
+            return
+        if self.status == "standing":
+            self._stand.apply_stand_control(m, d)
+            mujoco.mj_step(m, d)
+            if d.qpos[2] < 0.6:
+                self.status = "fallen"
+            return
+        if self.status != "stopping":
+            self.status, self._stop_t0 = "stopping", d.time
+        self.step(m, d, (0.0, 0.0, 0.0))                      # step in place while slowing down
+        if self.status == "fallen":
+            return
+        (xy_l, z_l), (xy_r, z_r) = sole(m, d, "left"), sole(m, d, "right")
+        yaw = yaw_of(d)
+        ahead = abs((xy_l[0] - xy_r[0]) * math.cos(yaw) + (xy_l[1] - xy_r[1]) * math.sin(yaw))
+        feet_down = max(z_l, z_r) < 0.01
+        slow = float(np.linalg.norm(d.qvel[:2])) < 0.15
+        waited = d.time - self._stop_t0
+        if waited > 1.0 and ((feet_down and ahead < 0.06 and slow) or waited > 4.0):
+            from stand_fix import StandBalancer                  # same controller as Stand mode
+            self._stand = StandBalancer(m, mujoco.MjData(m))     # scratch data: live robot untouched
+            self.status = "standing"
+    
 
     def follow(self, m, d, yaw_des):
         """Navigator mode: walk toward heading yaw_des (rad); None = stop (step in place)."""

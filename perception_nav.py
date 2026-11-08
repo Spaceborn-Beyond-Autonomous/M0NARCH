@@ -42,6 +42,8 @@ class NavConfig:
     camera_pitch_deg: float = -30.0                # looking down-forward
     camera_fovy_deg: float = 70.0
     camera_size: tuple = (160, 120)                # depth used for mapping
+    display_size: tuple = (640, 480)               # sharper picture for the dashboard only (not used for mapping)
+    
     use_camera: bool = True
     camera_max_range: float = 4.5                  # m, depth is used only up to here
     camera_depth_error: float = 0.02               # sensor spec: depth error ~2% of distance (typical)
@@ -158,6 +160,17 @@ class Sensors:
         self.dist = np.zeros(self.nray, np.float64)
         self.renderer = None
         self.last_rgb = None
+        self.display_renderer = None
+
+    def display_rgb(self, m, d):
+        """Same view as camera(), rendered larger and smoother for people to watch. Call after camera()."""
+        if self.display_renderer is None:
+            W = min(self.cfg.display_size[0], m.vis.global_.offwidth)
+            H = min(self.cfg.display_size[1], m.vis.global_.offheight)
+            self.display_renderer = mujoco.Renderer(m, H, W)
+        r = self.display_renderer
+        r.update_scene(d, self.cam, scene_option=self.opt)
+        return r.render().copy()
 
     def _yaw(self, d):
         R = d.xmat[self.body].reshape(3, 3)
@@ -512,6 +525,8 @@ class Navigator:
             self.grid._add(self._to_belief(cf, d), w * self.cfg.l_free)
             self.grid._add(self._to_belief(co, d), w * self.cfg.l_occ)
             np.clip(self.grid.L, -self.cfg.l_clamp, self.cfg.l_clamp, out=self.grid.L)
+            if self.live_view:                         # dashboard picture: sharper render, same view
+                rgb = self.sensors.display_rgb(m, d)
             self._store_cam(rgb)
 
     def plan(self, xy):
@@ -577,8 +592,10 @@ class Navigator:
 
     # -------------------------------------------------------------- images for the UI
     def _store_cam(self, rgb):
-        img = cv2.resize(cv2.cvtColor(rgb, cv2.COLOR_RGB2BGR), (320, 240), interpolation=cv2.INTER_NEAREST)
-        ok, jpg = cv2.imencode(".jpg", img)
+        img = cv2.cvtColor(rgb, cv2.COLOR_RGB2BGR)
+        if img.shape[1] < 320:                         # small perception image: enlarge for display
+            img = cv2.resize(img, (320, 240), interpolation=cv2.INTER_NEAREST)
+        ok, jpg = cv2.imencode(".jpg", img, [cv2.IMWRITE_JPEG_QUALITY, 90])
         if ok:
             with self._lock:
                 self._cam_jpg = jpg.tobytes()

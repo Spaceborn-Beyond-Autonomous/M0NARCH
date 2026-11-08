@@ -1277,7 +1277,11 @@ def control_loop():
                         sim.state == "WALK_AVOID"
                         and sim.active_mode == "OBSTACLE"
                     ):
-                        walker.follow(m, d, nav.step(m, d))   # None -> step in place
+                        yaw_cmd = nav.step(m, d)
+                        if yaw_cmd is None and nav.status == "goal reached":
+                            walker.stop(m, d)                 # stop and stand still at the goal
+                        else:
+                            walker.follow(m, d, yaw_cmd)      # None (no path yet) -> step in place
                     else:
                         walker.step(m, d, WALK_CMD)
 

@@ -74,7 +74,11 @@ class StandBalancer:
         s = min(1.0, (d.time - self._t_start) / RAMP_S)
         ref = self._q_start + (self.q_ref - self._q_start) * s
         err = d.subtree_com[1] - self.support_centre(d) + T_CP * d.subtree_linvel[1]
-        ref[self.sag] += K_BAL_X * err[0]
-        ref[self.lat] += K_BAL_Y * err[1]
+        w, x, y, z = d.qpos[3:7]                                  # rotate into the robot's heading frame
+        yaw = np.arctan2(2 * (w * z + x * y), 1 - 2 * (y * y + z * z))
+        fwd = np.cos(yaw) * err[0] + np.sin(yaw) * err[1]
+        side = -np.sin(yaw) * err[0] + np.cos(yaw) * err[1]
+        ref[self.sag] += K_BAL_X * fwd
+        ref[self.lat] += K_BAL_Y * side
         q, qd = d.qpos[self.qadr], d.qvel[self.vadr]
         d.ctrl[:] = np.clip(self.kp * (ref - q) - self.kd * qd, self.lo, self.hi)
