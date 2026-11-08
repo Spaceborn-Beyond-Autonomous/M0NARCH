@@ -1,0 +1,44 @@
+<mujoco model="h1_pick_place">
+  <include file="../mujoco_menagerie/unitree_h1/h1.xml"/>
+ 
+  <statistic center="0 0 1" extent="2"/>
+ 
+  <visual>
+    <headlight diffuse="0.6 0.6 0.6" ambient="0.3 0.3 0.3" specular="0 0 0"/>
+    <global azimuth="120" elevation="-20"/>
+  </visual>
+ 
+  <asset>
+    <texture type="skybox" builtin="gradient" rgb1="0.3 0.5 0.7" rgb2="0 0 0" width="512" height="512"/>
+    <texture name="groundplane" type="2d" builtin="checker" mark="edge" rgb1="0.2 0.3 0.4" rgb2="0.1 0.2 0.3" markrgb="0.8 0.8 0.8" width="300" height="300"/>
+    <material name="groundplane" texture="groundplane" texuniform="true" texrepeat="5 5" reflectance="0.1"/>
+  </asset>
+ 
+  <worldbody>
+    <light pos="0 0 3" dir="0 0 -1" directional="true"/>
+    <geom name="floor" type="plane" size="5 5 0.1" material="groundplane"/>
+ 
+    <!-- Table in front of the robot -->
+    <body name="table" pos="0.6 0 0.4">
+      <geom type="box" size="0.35 0.35 0.02" rgba="0.55 0.4 0.25 1"/>
+      <geom type="box" pos="0.3 0.3 -0.2" size="0.02 0.02 0.2" rgba="0.3 0.2 0.1 1"/>
+      <geom type="box" pos="-0.3 0.3 -0.2" size="0.02 0.02 0.2" rgba="0.3 0.2 0.1 1"/>
+      <geom type="box" pos="0.3 -0.3 -0.2" size="0.02 0.02 0.2" rgba="0.3 0.2 0.1 1"/>
+      <geom type="box" pos="-0.3 -0.3 -0.2" size="0.02 0.02 0.2" rgba="0.3 0.2 0.1 1"/>
+    </body>
+ 
+    <!-- Graspable object: free-floating box, position randomized each episode from Python -->
+    <body name="object" pos="0.55 0.0 0.45">
+      <freejoint name="object_joint"/>
+      <geom name="object_geom" type="box" size="0.03 0.03 0.03" mass="0.1" rgba="0.9 0.1 0.1 1" friction="1.0 0.01 0.001"/>
+    </body>
+ 
+    <!-- Target marker: visual-only site, moved each episode from Python -->
+    <site name="target_site" pos="0.55 0.3 0.45" size="0.03" rgba="0.1 0.9 0.1 0.5"/>
+  </worldbody>
+ 
+  <equality>
+    <!-- Grasp constraint: inactive by default, activated in Python when EE is close to object -->
+    <weld name="grasp_weld" body1="right_elbow_link" body2="object" active="false" solref="0.02 1"/>
+  </equality>
+</mujoco>
