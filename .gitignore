@@ -1,0 +1,10 @@
+# Pick & Place: only what the simulator needs (fix_pnp_files.py)
+H1_robot-Pick_Place/checkpoints/
+H1_robot-Pick_Place/logs/
+H1_robot-Pick_Place/MJDATA.TXT
+H1_robot-Pick_Place/mujoco_menagerie/*
+!H1_robot-Pick_Place/mujoco_menagerie/unitree_h1/
+!H1_robot-Pick_Place/mujoco_menagerie/robotiq_2f85/
+!H1_robot-Pick_Place/mujoco_menagerie/LICENSE
+__pycache__/
+MUJOCO_LOG.TXT

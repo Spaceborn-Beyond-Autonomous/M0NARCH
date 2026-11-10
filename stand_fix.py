@@ -31,13 +31,14 @@ class StandBalancer:
             d.qpos[:] = m.key_qpos[home]
             d.qvel[:] = 0.0
             mujoco.mj_forward(m, d)
-        act_j = [m.actuator_trnid[i, 0] for i in range(m.nu)]
+        self.act = [i for i in range(m.nu) if m.actuator_trntype[i] == mujoco.mjtTrn.mjTRN_JOINT]  # joint motors only
+        act_j = [m.actuator_trnid[i, 0] for i in self.act]
         self.qadr = np.array([m.jnt_qposadr[j] for j in act_j])
         self.vadr = np.array([m.jnt_dofadr[j] for j in act_j])
         self.names = [mujoco.mj_id2name(m, mujoco.mjtObj.mjOBJ_JOINT, j) for j in act_j]
         self.kp = np.array([next((v for k, v in GAINS.items() if k in n), 100.0) for n in self.names], float)
         self.kd = self.kp * KD_RATIO
-        self.lo, self.hi = m.actuator_ctrlrange[:, 0], m.actuator_ctrlrange[:, 1]
+        self.lo, self.hi = m.actuator_ctrlrange[self.act, 0], m.actuator_ctrlrange[self.act, 1]
         self.sag = [self.names.index(n) for n in ("left_ankle", "right_ankle")]
         self.lat = [self.names.index(n) for n in ("left_hip_roll", "right_hip_roll")]
         fb = [mujoco.mj_name2id(m, mujoco.mjtObj.mjOBJ_BODY, f) for f in FEET]
@@ -81,4 +82,4 @@ class StandBalancer:
         ref[self.sag] += K_BAL_X * fwd
         ref[self.lat] += K_BAL_Y * side
         q, qd = d.qpos[self.qadr], d.qvel[self.vadr]
-        d.ctrl[:] = np.clip(self.kp * (ref - q) - self.kd * qd, self.lo, self.hi)
+        d.ctrl[self.act] = np.clip(self.kp * (ref - q) - self.kd * qd, self.lo, self.hi)
