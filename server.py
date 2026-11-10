@@ -11,6 +11,22 @@ import cv2
 os.environ["MUJOCO_GL"] = "egl"
 
 import mujoco
+from gait_fix import walk_step
+from physics_walk import PhysicsWalker, load_model as _load_physics_model
+
+# E9 fix: real physics walking (physics_walk.py). Falls back to the kinematic gait if the
+# Unitree policy file is missing.
+try:
+    walker = PhysicsWalker()
+    load_h1 = _load_physics_model
+    print("[WALK] physics walking ON (Unitree H1 policy + sole-box feet)")
+except FileNotFoundError as _e:
+    walker = None
+    load_h1 = mujoco.MjModel.from_xml_path
+    print(f"[WALK] physics walking OFF, using kinematic gait. {_e}")
+WALK_CMD = (0.5, 0.0, 0.0)          # Walk mode: forward m/s, sideways m/s, turn rad/s
+from stand_fix import StandBalancer
+from perception_nav import Navigator, NavConfig
 
 from fastapi import FastAPI
 from fastapi.responses import StreamingResponse, HTMLResponse
@@ -69,7 +85,7 @@ NORMAL_MODEL_PATH = (
     "H1_robot-Physics-simulation/models/unitree_h1/scene.xml"
 )
 
-model_normal = mujoco.MjModel.from_xml_path(
+model_normal = load_h1(  # E9: sole-box feet when physics walking is on
     NORMAL_MODEL_PATH
 )
 
@@ -119,6 +135,12 @@ def load_pick_place_model():
     gripper_spec = mujoco.MjSpec.from_file(
         gripper_path
     )
+
+    h1_assets = os.path.abspath(os.path.join(
+        "H1_robot-Pick_Place", "mujoco_menagerie", "unitree_h1", "assets"
+    ))
+    for mesh in spec.meshes:
+        mesh.file = os.path.join(h1_assets, os.path.basename(mesh.file))
 
     def find_body_recursive(
         bodies,
@@ -193,6 +215,24 @@ model_obs.vis.global_.offwidth = 1280
 model_obs.vis.global_.offheight = 720
 
 data_obs = h1_env.data
+
+# Optional: run Obstacle Avoidance in another environment, e.g.
+#   M0NARCH_NAV_SCENE=H1_robot-Physics-simulation/models/unitree_h1/scene_course2.xml python server.py
+NAV_SCENE = os.environ.get("M0NARCH_NAV_SCENE", "H1_robot-RL-Perception/models/unitree_h1/scene_obstacles.xml")
+if "M0NARCH_NAV_SCENE" in os.environ or walker is not None:   # E9: reload with sole-box feet
+    model_obs = load_h1(NAV_SCENE)
+    model_obs.vis.global_.offwidth = 1280
+    model_obs.vis.global_.offheight = 720
+    data_obs = mujoco.MjData(model_obs)
+    print(f"[NAV] Obstacle Avoidance environment: {NAV_SCENE}")
+
+# Sensor-based navigation (perception_nav.py): LiDAR + camera -> map -> A*.
+# Change the goal at runtime with POST /api/nav/goal {"x": 7.9, "y": 0.0}
+nav = Navigator(NavConfig())
+NAV_GOAL = [7.9, 0.0]
+_goal_site = mujoco.mj_name2id(model_obs, mujoco.mjtObj.mjOBJ_SITE, "nav_goal")
+if _goal_site >= 0:                                  # the environment defines its own goal
+    NAV_GOAL = [float(v) for v in model_obs.site_pos[_goal_site][:2]]
 
 
 # ==============================================================================
@@ -598,7 +638,7 @@ def control_loop():
 
     with sim.lock:
 
-        balancer = H1BalanceController(
+        balancer = StandBalancer(  # E15 fix (stand_fix.py)
             model_normal,
             data_normal
         )
@@ -1231,307 +1271,33 @@ def control_loop():
                     else data_normal
                 )
 
-                gait_freq = 1.30
-
-                walk_speed = 0.30
-
-                sim.walk_phase += (
-                    2.0
-                    * math.pi
-                    * gait_freq
-                    * m.opt.timestep
-                )
-
-                phase = (
-                    sim.walk_phase
-                )
-
-                hip_amp = 0.38
-
-                l_hip_pitch = (
-                    -0.35
-                    + hip_amp
-                    * math.sin(phase)
-                )
-
-                r_hip_pitch = (
-                    -0.35
-                    - hip_amp
-                    * math.sin(phase)
-                )
-
-                l_knee = (
-                    0.65
-                    + 0.60
-                    * max(
-                        0.0,
-                        -math.sin(phase)
-                    ) ** 1.3
-                )
-
-                r_knee = (
-                    0.65
-                    + 0.60
-                    * max(
-                        0.0,
-                        math.sin(phase)
-                    ) ** 1.3
-                )
-
-                l_ankle = (
-                    -0.35
-                    - 0.25
-                    * max(
-                        0.0,
-                        -math.sin(phase)
-                    )
-                    + 0.15
-                    * max(
-                        0.0,
-                        math.sin(phase)
-                    )
-                )
-
-                r_ankle = (
-                    -0.35
-                    - 0.25
-                    * max(
-                        0.0,
-                        math.sin(phase)
-                    )
-                    + 0.15
-                    * max(
-                        0.0,
-                        -math.sin(phase)
-                    )
-                )
-
-                curr_x = float(
-                    d.qpos[0]
-                )
-
-                curr_y = float(
-                    d.qpos[1]
-                )
-
-                target_y = 0.0
-
-                d.qpos[0] += (
-                    walk_speed
-                    * m.opt.timestep
-                )
-
-
-                if (
-                    sim.state
-                    == "WALK_AVOID"
-                    and sim.active_mode
-                    == "OBSTACLE"
-                ):
-
-                    if curr_x < 1.2:
-
-                        target_y = 0.0
-
-                    elif 1.2 <= curr_x < 2.0:
-
-                        target_y = (
-                            1.2
-                            * (
-                                (curr_x - 1.2)
-                                / 0.8
-                            )
-                        )
-
-                    elif 2.0 <= curr_x < 3.6:
-
-                        target_y = 1.2
-
-                    elif 3.6 <= curr_x < 4.8:
-
-                        target_y = (
-                            1.2
-                            - 1.2
-                            * (
-                                (curr_x - 3.6)
-                                / 1.2
-                            )
-                        )
-
+                # E9 fix: real physics walking (physics_walk.py)
+                if walker is not None:
+                    if (
+                        sim.state == "WALK_AVOID"
+                        and sim.active_mode == "OBSTACLE"
+                    ):
+                        yaw_cmd = nav.step(m, d)
+                        if yaw_cmd is None and nav.status == "goal reached":
+                            walker.stop(m, d)                 # stop and stand still at the goal
+                        else:
+                            walker.follow(m, d, yaw_cmd)      # None (no path yet) -> step in place
                     else:
+                        walker.step(m, d, WALK_CMD)
 
-                        target_y = 0.0
-
-
-                d.qpos[1] += (
-                    target_y - curr_y
-                ) * 0.01
-
-                d.qpos[2] = (
-                    0.96
-                    + 0.015
-                    * math.cos(
-                        2.0 * phase
-                    )
-                )
-
-                d.qpos[3:7] = [
-                    1.0,
-                    0.0,
-                    0.0,
-                    0.0
-                ]
-
-
-                set_joint_qpos(
-                    m,
-                    d,
-                    "left_hip_yaw",
-                    0.0
-                )
-
-                set_joint_qpos(
-                    m,
-                    d,
-                    "left_hip_roll",
-                    0.0
-                )
-
-                set_joint_qpos(
-                    m,
-                    d,
-                    "left_hip_pitch",
-                    l_hip_pitch
-                )
-
-                set_joint_qpos(
-                    m,
-                    d,
-                    "left_knee",
-                    l_knee
-                )
-
-                set_joint_qpos(
-                    m,
-                    d,
-                    "left_ankle",
-                    l_ankle
-                )
-
-                set_joint_qpos(
-                    m,
-                    d,
-                    "right_hip_yaw",
-                    0.0
-                )
-
-                set_joint_qpos(
-                    m,
-                    d,
-                    "right_hip_roll",
-                    0.0
-                )
-
-                set_joint_qpos(
-                    m,
-                    d,
-                    "right_hip_pitch",
-                    r_hip_pitch
-                )
-
-                set_joint_qpos(
-                    m,
-                    d,
-                    "right_knee",
-                    r_knee
-                )
-
-                set_joint_qpos(
-                    m,
-                    d,
-                    "right_ankle",
-                    r_ankle
-                )
-
-                set_joint_qpos(
-                    m,
-                    d,
-                    "torso_joint",
-                    -0.05
-                    * math.sin(phase)
-                )
-
-
-                arm_amp = 0.38
-
-                set_joint_qpos(
-                    m,
-                    d,
-                    "left_shoulder_pitch",
-                    arm_amp
-                    * math.sin(phase)
-                )
-
-                set_joint_qpos(
-                    m,
-                    d,
-                    "left_shoulder_roll",
-                    0.12
-                )
-
-                set_joint_qpos(
-                    m,
-                    d,
-                    "left_shoulder_yaw",
-                    0.0
-                )
-
-                set_joint_qpos(
-                    m,
-                    d,
-                    "left_elbow",
-                    0.50
-                )
-
-                set_joint_qpos(
-                    m,
-                    d,
-                    "right_shoulder_pitch",
-                    -arm_amp
-                    * math.sin(phase)
-                )
-
-                set_joint_qpos(
-                    m,
-                    d,
-                    "right_shoulder_roll",
-                    -0.12
-                )
-
-                set_joint_qpos(
-                    m,
-                    d,
-                    "right_shoulder_yaw",
-                    0.0
-                )
-
-                set_joint_qpos(
-                    m,
-                    d,
-                    "right_elbow",
-                    0.50
-                )
-
-                d.qvel[:] = 0.0
-
-                mujoco.mj_forward(
-                    m,
-                    d
-                )
-
-                d.time += (
-                    m.opt.timestep
-                )
+                # E10-E14 fix: corrected kinematic gait (fallback, see gait_fix.py)
+                elif (
+                    sim.state == "WALK_AVOID"
+                    and sim.active_mode == "OBSTACLE"
+                ):
+                    # sensor-based navigation: the robot finds its own path
+                    yaw_cmd = nav.step(m, d)
+                    if yaw_cmd is None:
+                        d.time += m.opt.timestep   # stopped: goal reached or no path
+                    else:
+                        walk_step(m, d, sim, yaw_des=yaw_cmd)
+                else:
+                    walk_step(m, d, sim)
 
 
         # ======================================================================
@@ -1919,6 +1685,8 @@ def execute_command(
                     model_normal,
                     data_normal
                 )
+                if walker is not None:
+                    walker.reset(model_normal, data_normal)   # E9: upright, policy leg pose
 
 
             # ==============================================================
@@ -1948,6 +1716,9 @@ def execute_command(
                     model_obs,
                     data_obs
                 )
+                if walker is not None:
+                    walker.reset(model_obs, data_obs)      # E9: upright, policy leg pose
+                nav.reset(model_obs, data_obs, NAV_GOAL)
 
 
             # ==============================================================
@@ -2254,6 +2025,126 @@ def serve_dashboard():
 # ==============================================================================
 # START SERVER
 # ==============================================================================
+
+
+# ==============================================================================
+# NAVIGATION VIEW: robot camera + live map (perception_nav.py)
+# ==============================================================================
+def _nav_placeholder(text):
+    img = np.full((240, 320, 3), 40, np.uint8)
+    cv2.putText(img, text, (20, 125), cv2.FONT_HERSHEY_SIMPLEX, 0.55, (200, 200, 200), 1)
+    return cv2.imencode(".jpg", img)[1].tobytes()
+
+_NAV_WAIT = _nav_placeholder("click OBSTACLE AVOIDANCE")
+
+
+def _nav_stream(get_frame):
+    while sim.running:
+        frame = get_frame() or _NAV_WAIT
+        yield b"--frame\r\nContent-Type: image/jpeg\r\n\r\n" + frame + b"\r\n"
+        time.sleep(0.1)
+
+
+@app.get("/nav/camera_feed")
+def nav_camera_feed():
+    return StreamingResponse(_nav_stream(nav.camera_jpeg),
+                             media_type="multipart/x-mixed-replace; boundary=frame")
+
+
+@app.get("/nav/map_feed")
+def nav_map_feed():
+    return StreamingResponse(_nav_stream(nav.map_jpeg),
+                             media_type="multipart/x-mixed-replace; boundary=frame")
+
+
+@app.get("/api/nav/status")
+def nav_status():
+    return {"status": nav.status, "goal": NAV_GOAL,
+            "walked_m": round(float(getattr(nav, "distance", 0.0)), 2)}
+
+
+class NavGoal(BaseModel):
+    x: float
+    y: float
+
+
+@app.post("/api/nav/goal")
+def nav_set_goal(goal: NavGoal):
+    NAV_GOAL[:] = [goal.x, goal.y]
+    with sim.lock:
+        nav.set_goal(NAV_GOAL)
+    return {"goal": NAV_GOAL}
+
+
+@app.get("/nav", response_class=HTMLResponse)
+def nav_page():
+    return """<!doctype html><html><head><title>M0NARCH Navigation</title>
+<style>body{background:#0b1220;color:#cfe;font-family:monospace;margin:16px}
+.row{display:flex;gap:16px;flex-wrap:wrap}.card{background:#121a2b;border:1px solid #2a3550;
+border-radius:10px;padding:10px}img{display:block;background:#555}</style></head><body>
+<h3>M0NARCH Navigation (LiDAR + camera)</h3>
+<div class=row>
+<div class=card><div>ROBOT CAMERA (head)</div><img src="/nav/camera_feed" width=480 height=360></div>
+<div class=card><div>LIVE MAP (occupancy grid + A* path)</div><img src="/nav/map_feed" height=360></div>
+<div class=card><div>WORLD (3rd person)</div><img src="/video_feed" width=480 height=270></div>
+</div>
+<p id=st>status: ...</p>
+<p>Goal x <input id=gx size=5 value=7.9> y <input id=gy size=5 value=0>
+<button onclick="setGoal()">set goal</button>
+<button onclick="fetch('/api/command/walk_avoid',{method:'POST'})">start</button></p>
+<p>Map: white = free, black = obstacle or drop-off, pink = safety margin, grey = unknown,
+blue = planned path, green = robot, red ring = goal, orange = latest LiDAR hits.</p>
+<script>
+function setGoal(){fetch('/api/nav/goal',{method:'POST',headers:{'Content-Type':'application/json'},
+body:JSON.stringify({x:+gx.value,y:+gy.value})})}
+setInterval(()=>fetch('/api/nav/status').then(r=>r.json()).then(s=>{st.textContent=
+'status: '+s.status+'   goal: ('+s.goal.join(', ')+')   walked: '+s.walked_m+' m'}),1000)
+</script></body></html>"""
+
+
+
+# ==============================================================================
+# JOINT VALUES + READINESS SCORE (apply_extras.py)
+# ==============================================================================
+@app.get("/api/joints")
+def api_joints():
+    with sim.lock:
+        if sim.active_mode == "OBSTACLE":
+            m, d = model_obs, data_obs
+        elif sim.active_mode == "PNP":
+            m, d = model_pnp, data_pnp
+        else:
+            m, d = model_normal, data_normal
+        physics = walker is not None or sim.state not in ("WALK", "WALK_AVOID")   # E9 fixed: physics walk
+        joints = []
+        for i in range(m.nu):
+            j = m.actuator_trnid[i, 0]
+            if m.actuator_trntype[i] != mujoco.mjtTrn.mjTRN_JOINT or j < 0:
+                continue
+            q = float(d.qpos[m.jnt_qposadr[j]])
+            lo, hi = (float(v) for v in m.jnt_range[j])
+            joints.append({
+                "joint": mujoco.mj_id2name(m, mujoco.mjtObj.mjOBJ_JOINT, j),
+                "deg": round(math.degrees(q), 1),
+                "range_pct": round(100 * (q - lo) / (hi - lo), 0) if hi > lo else None,
+                "vel_dps": round(math.degrees(float(d.qvel[m.jnt_dofadr[j]])), 1) if physics else None,
+                "torque_Nm": round(float(d.actuator_force[i]), 1) if physics else None,
+            })
+        return {"state": sim.state, "physics": physics, "sim_time": round(float(d.time), 2),
+                "pelvis_xyz": [round(float(v), 3) for v in d.qpos[:3]], "joints": joints}
+
+
+@app.get("/api/readiness")
+def api_readiness():
+    import json as _json
+    name = os.path.splitext(os.path.basename(NAV_SCENE))[0]
+    path = f"readiness_{name}.json"
+    if not os.path.exists(path):
+        return {"available": False, "hint": f"run: python evaluate.py --env={NAV_SCENE}"}
+    r = _json.load(open(path))
+    return {"available": True, "env": name, "readiness": r["readiness"], "band": r["band"],
+            "difficulty": r["difficulty"], "parts": r["parts"]}
+
 
 if __name__ == "__main__":
 

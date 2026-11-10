@@ -1648,6 +1648,146 @@
 
   </script>
 
+
+<!-- NAV PANEL (perception_nav): robot camera + live map -->
+<div id="nav-panel" style="position:fixed;right:16px;bottom:16px;z-index:9999;background:rgba(10,15,25,.88);
+ border:1px solid #2a3550;border-radius:10px;padding:8px;font:11px monospace;color:#cde">
+ <div style="display:flex;gap:8px">
+  <div><div>ROBOT CAMERA</div><img src="/nav/camera_feed" width="240" height="180"></div>
+  <div><div>LIVE MAP</div><img src="/nav/map_feed" height="180" style="max-width:260px;object-fit:contain;background:#888"></div>
+ </div>
+ <div id="nav-status" style="margin-top:4px">status: idle</div>
+ <a href="/nav" target="_blank" style="color:#8cf">open large view</a>
+</div>
+<script>
+setInterval(function(){fetch('/api/nav/status').then(function(r){return r.json()}).then(function(s){
+ document.getElementById('nav-status').textContent='status: '+s.status+'  goal: ('+s.goal.join(', ')+')  walked: '+s.walked_m+' m';})},1000);
+</script>
+
+<!-- JOINT PANEL + READINESS (apply_extras.py) -->
+<div id="joint-panel" style="position:fixed;right:16px;top:240px;z-index:9999;width:330px;max-height:52vh;overflow:auto;
+ background:rgba(10,15,25,.88);border:1px solid #2a3550;border-radius:10px;padding:8px;font:11px monospace;color:#cde">
+ <div style="display:flex;justify-content:space-between"><b>JOINTS</b>
+  <span id="jp-toggle" style="cursor:pointer;color:#8cf" onclick="var t=document.getElementById('jp-body');t.style.display=t.style.display=='none'?'':'none'">hide/show</span></div>
+ <div id="jp-meta" style="margin:3px 0;color:#9ab"></div>
+ <table id="jp-body" style="width:100%;border-collapse:collapse"></table>
+ <div id="jp-ready" style="margin-top:6px;padding-top:6px;border-top:1px solid #2a3550"></div>
+</div>
+<script>
+function jpRow(j){var p=j.range_pct==null?0:Math.max(0,Math.min(100,j.range_pct));
+ var c=p<5||p>95?'#f66':'#6c9';
+ return '<tr><td>'+j.joint.replace('_link','')+'</td><td style="text-align:right">'+j.deg.toFixed(1)+'&deg;</td>'+
+  '<td style="width:70px"><div style="background:#223;height:6px"><div style="width:'+p+'%;height:6px;background:'+c+'"></div></div></td>'+
+  '<td style="text-align:right;color:#9ab">'+(j.torque_Nm==null?'':j.torque_Nm.toFixed(0)+' Nm')+'</td></tr>';}
+setInterval(function(){fetch('/api/joints').then(function(r){return r.json()}).then(function(s){
+ document.getElementById('jp-meta').textContent=s.state+'  t='+s.sim_time+'s  pelvis z='+s.pelvis_xyz[2]+' m'+
+  (s.physics?'  (physics: torque shown)':'  (walk: angles only (policy missing))');
+ document.getElementById('jp-body').innerHTML=s.joints.map(jpRow).join('');})},200);
+setInterval(function(){fetch('/api/readiness').then(function(r){return r.json()}).then(function(s){
+ document.getElementById('jp-ready').innerHTML=s.available?
+  '<b>REAL-WORLD READINESS: '+Math.round(s.readiness)+'/100</b> '+s.band+'<br>env '+s.env+', difficulty '+s.difficulty+
+  '/100<br>N '+s.parts.N.toFixed(2)+'  S '+s.parts.S.toFixed(2)+'  B '+s.parts.B.toFixed(2)+'  L '+s.parts.L.toFixed(2):
+  'readiness: not evaluated yet<br><span style="color:#9ab">'+s.hint+'</span>';})},5000);
+</script>
+
+
+
+<!-- PANEL LAYOUT: joints only after Stand / Walk / Obstacle Avoidance, camera + map only in
+     Obstacle Avoidance, both stacked in one right-hand column (never overlap), large view in this page -->
+<style>
+#m0-dock{position:fixed;right:16px;top:240px;bottom:16px;z-index:9999;display:flex;flex-direction:column;
+ align-items:flex-end;gap:10px;pointer-events:none}
+#m0-dock>div{pointer-events:auto}
+#m0-dock #joint-panel{position:static !important;flex:0 1 auto;min-height:0;max-height:none !important}
+#m0-dock #nav-panel{position:static !important;flex:0 0 auto}
+#m0-large{position:fixed;inset:0;z-index:10001;background:rgba(5,8,14,.94);display:none;flex-direction:column;
+ align-items:center;justify-content:center;gap:12px;font:12px monospace;color:#cde}
+#m0-large .m0-row{display:flex;gap:16px;align-items:flex-start}
+#m0-large img{height:min(70vh,560px);max-width:46vw;object-fit:contain;background:#888;border-radius:8px}
+#m0-large button{background:#1b2740;color:#8cf;border:1px solid #2a3550;border-radius:6px;padding:6px 14px;
+ font:12px monospace;cursor:pointer}
+/* joint table: fixed layout so only the numbers change, rows and columns never move */
+#m0-dock #joint-panel{width:390px !important}
+#joint-panel #jp-meta{height:2.6em;overflow:hidden}
+#joint-panel #jp-body{table-layout:fixed;width:100%}
+#joint-panel #jp-body td{white-space:nowrap;overflow:hidden;font-variant-numeric:tabular-nums;
+ padding:1px 3px;height:1.45em;line-height:1.45em}
+#joint-panel #jp-body td:nth-child(1){width:50%;text-overflow:ellipsis}
+#joint-panel #jp-body td:nth-child(2){width:17%;text-align:right}
+#joint-panel #jp-body td:nth-child(3){width:15%}
+#joint-panel #jp-body td:nth-child(4){width:18%;text-align:right}
+</style>
+<div id="m0-dock"></div>
+<div id="m0-large">
+ <div class="m0-row">
+  <div><div>ROBOT CAMERA</div><img id="m0-cam-big" alt="robot camera"></div>
+  <div><div>LIVE MAP</div><img id="m0-map-big" alt="live map"></div>
+ </div>
+ <div id="m0-large-status"></div>
+ <button onclick="m0CloseLarge()">close large view</button>
+</div>
+<script>
+(function () {
+  var dock = document.getElementById('m0-dock');
+  var jp = document.getElementById('joint-panel');
+  var np = document.getElementById('nav-panel');
+  if (!dock || !jp || !np) return;
+  dock.appendChild(jp);                       // joints on top
+  dock.appendChild(np);                       // camera + map underneath, same column: no overlap
+  var feeds = Array.prototype.slice.call(np.querySelectorAll('img'));
+  feeds.forEach(function (im) { im.dataset.src = im.getAttribute('src'); });
+
+  function show(el, on) {
+    el.style.display = on ? '' : 'none';
+    if (el === np) feeds.forEach(function (im) {      // stop the video streams while hidden
+      if (on) { im.src = im.dataset.src; } else { im.removeAttribute('src'); }
+    });
+  }
+  show(jp, false);                            // nothing shown until a mode is clicked
+  show(np, false);
+
+  var link = np.querySelector('a[href="/nav"]');      // "open large view": same page, not a new tab
+  if (link) {
+    link.removeAttribute('target');
+    link.href = '#';
+    link.onclick = function (e) { e.preventDefault(); m0OpenLarge(); };
+  }
+  window.m0OpenLarge = function () {
+    document.getElementById('m0-cam-big').src = '/nav/camera_feed';
+    document.getElementById('m0-map-big').src = '/nav/map_feed';
+    document.getElementById('m0-large').style.display = 'flex';
+  };
+  window.m0CloseLarge = function () {
+    document.getElementById('m0-large').style.display = 'none';
+    document.getElementById('m0-cam-big').removeAttribute('src');
+    document.getElementById('m0-map-big').removeAttribute('src');
+  };
+  document.addEventListener('keydown', function (e) { if (e.key === 'Escape') m0CloseLarge(); });
+  var m0Mode = null;                          // last mode button clicked
+  setInterval(function () {
+    var s = document.getElementById('nav-status');
+    if (s) document.getElementById('m0-large-status').textContent = s.textContent;
+    if (m0Mode === 'walk_avoid' && s)           // goal reached = robot standing still: hide joints
+      show(jp, s.textContent.indexOf('goal reached') < 0);
+  }, 1000);
+
+  window.m0SetPanels = function (action) {
+    m0Mode = action;
+    show(jp, ['walk', 'walk_avoid'].indexOf(action) >= 0);           // joints: only while walking / moving
+    show(np, action === 'walk_avoid');                                // camera + map: Obstacle Avoidance only
+    if (action !== 'walk_avoid') m0CloseLarge();
+  };
+  var original = window.triggerAction;                // the buttons call triggerAction('stand') etc.
+  window.triggerAction = function (action) {
+    m0SetPanels(action);
+    return original.apply(this, arguments);
+  };
+})();
+</script>
+
+
+
+
 </body>
 
 </html>
