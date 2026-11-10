@@ -1692,22 +1692,22 @@ setInterval(function(){fetch('/api/readiness').then(function(r){return r.json()}
 
 
 
-<!-- PANEL LAYOUT: joints only after Stand / Walk / Obstacle Avoidance, camera + map only in
-     Obstacle Avoidance, both stacked in one right-hand column (never overlap), large view in this page -->
+
+
+<!-- PANEL LAYOUT: joints only while the robot walks, camera + map only in Obstacle Avoidance,
+     both stacked in one right-hand column (never overlap), large view in this page -->
 <style>
 #m0-dock{position:fixed;right:16px;top:240px;bottom:16px;z-index:9999;display:flex;flex-direction:column;
  align-items:flex-end;gap:10px;pointer-events:none}
 #m0-dock>div{pointer-events:auto}
-#m0-dock #joint-panel{position:static !important;flex:0 1 auto;min-height:0;max-height:none !important}
+#m0-dock #joint-panel{position:static !important;flex:0 1 auto;min-height:0;max-height:none !important;width:390px !important}
 #m0-dock #nav-panel{position:static !important;flex:0 0 auto}
-#m0-large{position:fixed;inset:0;z-index:10001;background:rgba(5,8,14,.94);display:none;flex-direction:column;
- align-items:center;justify-content:center;gap:12px;font:12px monospace;color:#cde}
-#m0-large .m0-row{display:flex;gap:16px;align-items:flex-start}
-#m0-large img{height:min(70vh,560px);max-width:46vw;object-fit:contain;background:#888;border-radius:8px}
-#m0-large button{background:#1b2740;color:#8cf;border:1px solid #2a3550;border-radius:6px;padding:6px 14px;
- font:12px monospace;cursor:pointer}
+/* large view: the SAME camera + map panel, enlarged (no extra video streams) */
+#m0-backdrop{position:fixed;inset:0;z-index:9998;background:rgba(5,8,14,.94);display:none}
+#m0-dock #nav-panel.m0-big{position:fixed !important;left:4vw;right:4vw;top:6vh;bottom:6vh;
+ display:flex;flex-direction:column;align-items:center;justify-content:center;font-size:13px}
+#nav-panel.m0-big img{height:70vh !important;width:auto !important;max-width:44vw !important;object-fit:contain}
 /* joint table: fixed layout so only the numbers change, rows and columns never move */
-#m0-dock #joint-panel{width:390px !important}
 #joint-panel #jp-meta{height:2.6em;overflow:hidden}
 #joint-panel #jp-body{table-layout:fixed;width:100%}
 #joint-panel #jp-body td{white-space:nowrap;overflow:hidden;font-variant-numeric:tabular-nums;
@@ -1716,16 +1716,14 @@ setInterval(function(){fetch('/api/readiness').then(function(r){return r.json()}
 #joint-panel #jp-body td:nth-child(2){width:17%;text-align:right}
 #joint-panel #jp-body td:nth-child(3){width:15%}
 #joint-panel #jp-body td:nth-child(4){width:18%;text-align:right}
+/* Pick & Place robot camera: full 4:3 picture (no cropping), click to enlarge */
+#eyeFeed{width:400px !important;height:300px !important;object-fit:contain !important;cursor:zoom-in}
+#eyeCamContainer.m0-big{position:fixed !important;left:4vw !important;right:4vw !important;top:6vh !important;
+ bottom:6vh !important;z-index:10000;justify-content:center}
+#eyeCamContainer.m0-big #eyeFeed{width:auto !important;height:80vh !important;max-width:90vw !important;cursor:zoom-out}
 </style>
 <div id="m0-dock"></div>
-<div id="m0-large">
- <div class="m0-row">
-  <div><div>ROBOT CAMERA</div><img id="m0-cam-big" alt="robot camera"></div>
-  <div><div>LIVE MAP</div><img id="m0-map-big" alt="live map"></div>
- </div>
- <div id="m0-large-status"></div>
- <button onclick="m0CloseLarge()">close large view</button>
-</div>
+<div id="m0-backdrop" onclick="m0CloseLarge()"></div>
 <script>
 (function () {
   var dock = document.getElementById('m0-dock');
@@ -1736,37 +1734,49 @@ setInterval(function(){fetch('/api/readiness').then(function(r){return r.json()}
   dock.appendChild(np);                       // camera + map underneath, same column: no overlap
   var feeds = Array.prototype.slice.call(np.querySelectorAll('img'));
   feeds.forEach(function (im) { im.dataset.src = im.getAttribute('src'); });
+  var eye = document.getElementById('eyeFeed');       // Pick & Place robot-eye video
+  if (eye) { eye.dataset.src = eye.getAttribute('src'); eye.removeAttribute('src'); }
 
   function show(el, on) {
     el.style.display = on ? '' : 'none';
-    if (el === np) feeds.forEach(function (im) {      // stop the video streams while hidden
-      if (on) { im.src = im.dataset.src; } else { im.removeAttribute('src'); }
+    if (el === np) feeds.forEach(function (im) {      // stream video only while it is visible
+      if (on) { if (!im.getAttribute('src')) im.src = im.dataset.src; } else { im.removeAttribute('src'); }
     });
   }
   show(jp, false);                            // nothing shown until a mode is clicked
   show(np, false);
 
-  var link = np.querySelector('a[href="/nav"]');      // "open large view": same page, not a new tab
+  var link = np.querySelector('a[href="/nav"]');      // large view in this page, not a new tab
+  window.m0OpenLarge = function () {
+    np.classList.add('m0-big');
+    document.getElementById('m0-backdrop').style.display = 'block';
+    if (link) link.textContent = 'close large view (Esc)';
+  };
+  var eyeBox = document.getElementById('eyeCamContainer');
+  if (eye && eyeBox) eye.onclick = function () {      // click the robot camera to enlarge / shrink
+    var big = !eyeBox.classList.contains('m0-big');
+    eyeBox.classList.toggle('m0-big', big);
+    document.getElementById('m0-backdrop').style.display = big ? 'block' : 'none';
+  };
+  window.m0CloseLarge = function () {
+    if (eyeBox) eyeBox.classList.remove('m0-big');
+    np.classList.remove('m0-big');
+    document.getElementById('m0-backdrop').style.display = 'none';
+    if (link) link.textContent = 'open large view';
+  };
   if (link) {
     link.removeAttribute('target');
     link.href = '#';
-    link.onclick = function (e) { e.preventDefault(); m0OpenLarge(); };
+    link.onclick = function (e) {
+      e.preventDefault();
+      if (np.classList.contains('m0-big')) { m0CloseLarge(); } else { m0OpenLarge(); }
+    };
   }
-  window.m0OpenLarge = function () {
-    document.getElementById('m0-cam-big').src = '/nav/camera_feed';
-    document.getElementById('m0-map-big').src = '/nav/map_feed';
-    document.getElementById('m0-large').style.display = 'flex';
-  };
-  window.m0CloseLarge = function () {
-    document.getElementById('m0-large').style.display = 'none';
-    document.getElementById('m0-cam-big').removeAttribute('src');
-    document.getElementById('m0-map-big').removeAttribute('src');
-  };
   document.addEventListener('keydown', function (e) { if (e.key === 'Escape') m0CloseLarge(); });
+
   var m0Mode = null;                          // last mode button clicked
   setInterval(function () {
     var s = document.getElementById('nav-status');
-    if (s) document.getElementById('m0-large-status').textContent = s.textContent;
     if (m0Mode === 'walk_avoid' && s)           // goal reached = robot standing still: hide joints
       show(jp, s.textContent.indexOf('goal reached') < 0);
   }, 1000);
@@ -1776,6 +1786,9 @@ setInterval(function(){fetch('/api/readiness').then(function(r){return r.json()}
     show(jp, ['walk', 'walk_avoid'].indexOf(action) >= 0);           // joints: only while walking / moving
     show(np, action === 'walk_avoid');                                // camera + map: Obstacle Avoidance only
     if (action !== 'walk_avoid') m0CloseLarge();
+    if (eye) {                                                        // robot-eye video: Pick & Place only
+      if (action === 'pick_and_place') { eye.src = eye.dataset.src; } else { eye.removeAttribute('src'); }
+    }
   };
   var original = window.triggerAction;                // the buttons call triggerAction('stand') etc.
   window.triggerAction = function (action) {

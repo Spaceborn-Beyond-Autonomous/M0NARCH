@@ -1,0 +1,6 @@
+<mujoco model="h1_test_fixed">
+  <include file="mujoco_menagerie/unitree_h1/scene.xml"/>
+  <equality>
+    <weld name="base_weld" body1="world" body2="pelvis" solref="0.02 1"/>
+  </equality>
+</mujoco>
